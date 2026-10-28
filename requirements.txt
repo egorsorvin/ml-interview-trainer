@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+jinja2
+pyyaml
+pydantic>=2
+fsrs>=6
+markdown-it-py
+mdit-py-plugins
+python-multipart
+# для тестов
+pytest
+httpx

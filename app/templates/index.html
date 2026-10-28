@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Сегодня</h1>
+<p class="muted small" style="margin:0">Повторяем то, что подошло по расписанию, и добавляем новое (до {{ d.new_per_day }} в день).</p>
+
+{% if empty %}
+  <div class="banner warn">Для этого режима сейчас нет подходящих вопросов.</div>
+{% endif %}
+{% if sync and sync.errors %}
+  <div class="banner bad">В файлах вопросов есть ошибки ({{ sync.errors|length }}). <a href="/import">Посмотреть</a></div>
+{% endif %}
+
+{% if d.total == 0 %}
+  <div class="card">
+    <h2 style="margin-top:0">Вопросов пока нет</h2>
+    <p>Положи YAML-файлы в папку <code>questions/</code> или вставь батч на странице импорта.</p>
+    <a class="btn primary" href="/import">Импортировать вопросы</a>
+  </div>
+{% else %}
+  <div class="stats">
+    <div class="stat"><b>{{ d.due }}</b><span>к повторению</span></div>
+    <div class="stat"><b>{{ d.new_available }}</b><span>новых на сегодня</span></div>
+    <div class="stat"><b>{{ d.today_n }}</b><span>ответов сегодня{% if d.today_acc is not none %} · {{ d.today_acc }}%{% endif %}</span></div>
+    <div class="stat"><b>{{ d.streak }}</b><span>дней подряд</span></div>
+  </div>
+
+  {% if d.paused %}
+    <p class="small muted" style="margin:0 0 8px">На паузе в ежедневной сессии: <b>{{ d.paused|join(', ') }}</b> · <a href="/settings">настроить</a></p>
+  {% endif %}
+  <div class="actions">
+    {% if d.due + d.new_available > 0 %}
+      <a class="btn primary" href="/start?mode=daily">Начать сессию · {{ d.due + d.new_available }}</a>
+    {% else %}
+      <span class="btn" style="cursor:default">На сегодня всё пройдено 🎉</span>
+    {% endif %}
+    <a class="btn" href="/start?mode=random&n=10">Мини-собес · 10</a>
+    <a class="btn" href="/start?mode=weak">Слабые места{% if d.weak %} · {{ d.weak }}{% endif %}</a>
+  </div>
+
+  <div class="card">
+    <div class="chart">
+      {% for x in d.activity %}<div class="{{ 'has' if x.n }}" style="height:{{ x.h }}%" title="{{ x.label }}: {{ x.n }}"></div>{% endfor %}
+    </div>
+    <div class="chart-labels">{% for x in d.activity %}<span>{{ x.label[:2] if loop.index % 2 == 1 else '' }}</span>{% endfor %}</div>
+    <div class="muted small" style="margin-top:6px">Ответы за 14 дней</div>
+  </div>
+
+  <h2>Темы <span class="muted small">· {{ d.learned }} из {{ d.total }} вопросов уже в работе</span></h2>
+  <div class="card" style="padding-top:8px;padding-bottom:8px">
+    {% for g in d.topics %}
+      <div class="topic">
+        <details>
+          <summary>
+            <div class="topic-head">
+              <span class="name">{{ g.name }}
+                {% if g.name in d.paused %}<span class="pill">⏸ пауза</span>{% endif %}
+                {% if g.due %}<span class="pill due">{{ g.due }} к повтору</span>{% endif %}
+                {% if g.acc is not none %}<span class="pill {{ 'ok' if g.acc >= 80 else ('bad' if g.acc < 60 else '') }}">{{ g.acc }}%</span>{% endif %}
+              </span>
+              <span class="muted small">{{ g.learned }}/{{ g.total }}</span>
+              <div class="bar" style="grid-column:1/-1"><i style="width:{{ (100 * g.learned / g.total)|round }}%"></i></div>
+            </div>
+          </summary>
+          <div class="sub">
+            <div class="row">
+              <span class="muted small">Вся тема</span>
+              <span>
+                <a href="/start?mode=daily&topic={{ g.name }}">повторить</a> ·
+                <a href="/start?mode=topic&topic={{ g.name }}">потренироваться</a> ·
+                <a href="/questions?topic={{ g.name }}">вопросы</a>
+              </span>
+            </div>
+            {% for c in g.children %}
+              <div class="row">
+                <span>{{ c.name }}
+                  {% if c.due %}<span class="pill due">{{ c.due }}</span>{% endif %}
+                  {% if c.acc is not none %}<span class="pill {{ 'ok' if c.acc >= 80 else ('bad' if c.acc < 60 else '') }}">{{ c.acc }}%</span>{% endif %}
+                  <span class="muted small">{{ c.learned }}/{{ c.total }}</span>
+                </span>
+                <span>
+                  <a href="/start?mode=daily&topic={{ c.name }}">повторить</a> ·
+                  <a href="/start?mode=topic&topic={{ c.name }}">потренироваться</a>
+                </span>
+              </div>
+            {% endfor %}
+          </div>
+        </details>
+      </div>
+    {% endfor %}
+  </div>
+  {% if d.flagged %}
+    <p class="small"><a href="/flagged">{{ d.flagged }} вопрос(ов) помечены как некорректные →</a></p>
+  {% endif %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from "_macros.html" import meta, reference, options_review, match_review, order_review, llm_review %}
+{% block title %}Разбор{% endblock %}
+{% block content %}
+{{ meta(q) }}
+
+<div class="result r{{ r.rating }}">
+  {% if q.type in ('mcq', 'multi') %}
+    {{ {1: '✗ Неверно', 2: '≈ Почти: выбраны не все верные', 3: '✓ Верно'}[r.rating] }}
+  {% elif q.type in ('match', 'order') %}
+    {{ {1: '✗ Неверно', 2: '≈ Почти', 3: '✓ Верно'}[r.rating] }} · {{ (r.score * 100)|round|int }}%
+  {% else %}
+    {{ RATING_LABELS[r.rating] }}
+  {% endif %}
+</div>
+{% if a.retry %}<p class="muted small">Повторная попытка в конце сессии — на расписание не влияет.</p>{% endif %}
+
+<div class="card question md">{{ q.question|md }}</div>
+
+{% if q.type in ('mcq', 'multi') %}
+  {{ options_review(q, a.selected) }}
+{% elif q.type == 'match' %}
+  {{ match_review(q, a.match) }}
+{% elif q.type == 'order' %}
+  {{ order_review(q, a.order) }}
+{% else %}
+  {% if a.text and a.text != (q.starter or '') %}
+    <h4>Твой ответ</h4>
+    <div class="card"><pre style="margin:0;white-space:pre-wrap;font:inherit">{{ a.text }}</pre></div>
+  {% endif %}
+  {% if a.llm %}
+    <h4>Эталонный ответ</h4>
+    <div class="card md">{{ q.answer|md }}</div>
+    {{ llm_review(a.llm) }}
+    {% if q.explanation %}<h4>Пояснение</h4><div class="md">{{ q.explanation|md }}</div>{% endif %}
+    <p class="muted small">Модель предложила «{{ RATING_LABELS[a.llm.suggested] }}»{% if a.llm.suggested != r.rating %}, итоговая оценка: «{{ RATING_LABELS[r.rating] }}»{% else %}, оценки совпали{% endif %}.</p>
+  {% else %}
+    {{ reference(q, a if q.rubric else None) }}
+    {% if a.suggested is defined and a.suggested and q.rubric %}
+      <p class="muted small">По отмеченным пунктам ({{ (r.score * 100)|round|int if a.suggested == r.rating else '–' }}%) предлагалась оценка «{{ RATING_LABELS[a.suggested] }}».</p>
+    {% endif %}
+  {% endif %}
+{% endif %}
+
+{% if next_due %}
+  <p class="muted small" style="margin-top:18px">Следующее повторение: <b>{{ next_due }}</b></p>
+{% elif not a.retry %}
+  <p class="muted small" style="margin-top:18px">Ответ записан в историю; расписание не менялось — вопрос ещё не подошёл по сроку.</p>
+{% endif %}
+
+<div class="sticky-next actions">
+  <a id="next" class="btn primary" href="/s/{{ s.id }}" autofocus>{{ 'Завершить' if is_last else 'Дальше →' }}</a>
+  {% if not is_last %}<span class="muted small" style="align-self:center">осталось {{ left }} · Enter</span>{% endif %}
+</div>
+
+<details class="flag">
+  <summary>⚑ Вопрос некорректен или ответ неверный?</summary>
+  <form method="post" action="/q/{{ q.id }}/flag" style="margin-top:8px">
+    <input type="hidden" name="next" value="/s/{{ s.id }}">
+    <input type="text" name="note" placeholder="Что не так (это уйдёт в список для исправления)">
+    <div class="actions"><button class="btn small danger" type="submit">Пометить и убрать из очереди</button></div>
+  </form>
+</details>
+{% endblock %}

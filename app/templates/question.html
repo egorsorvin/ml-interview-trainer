@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% from "_macros.html" import meta, reference, rate_buttons %}
+{% block title %}Вопрос {{ pos }}/{{ total }}{% endblock %}
+{% block content %}
+<div class="qhead">
+  <span>{{ MODES[s.mode] }}{% if s.topic %} · {{ s.topic }}{% endif %}{% if retry %} · <b style="color:var(--warn)">повтор ошибки</b>{% endif %}</span>
+  <span>{{ pos }} / {{ total }}</span>
+</div>
+<div class="progress"><i style="width:{{ (100 * (pos - 1) / total)|round }}%"></i></div>
+
+{{ meta(q) }}
+
+<form id="qform" method="post" action="/s/{{ s.id }}/answer" autocomplete="off" data-sid="{{ s.id }}" data-qid="{{ q.id }}">
+  <input type="hidden" name="qid" value="{{ q.id }}">
+  <input type="hidden" name="time_ms" value="0">
+
+  <div class="card question md">{{ q.question|md }}</div>
+
+  {% if options %}
+    {% set kind = 'radio' if q.type == 'mcq' else 'checkbox' %}
+    {% if q.type == 'multi' %}<p class="muted small">Выбери все верные варианты.</p>{% endif %}
+    {% for i, o in options %}
+      <label class="opt">
+        <input type="{{ kind }}" name="choice" value="{{ i }}">
+        <span class="key">{{ loop.index }}</span>
+        <span>{{ o.text|md_inline }}</span>
+      </label>
+    {% endfor %}
+    <div class="actions"><button class="btn primary" type="submit">Ответить</button></div>
+    <p class="muted small">Клавиши: 1–{{ options|length }} — выбрать, Enter — ответить.</p>
+
+  {% elif q.type == 'match' %}
+    <p class="muted small">Подбери к каждому пункту подходящий вариант из списка.</p>
+    <h4>Варианты</h4>
+    <div class="card">
+      {% for i, text in match_choices %}
+        <div class="choice-row"><b class="letter">{{ 'ABCDEFGHIJ'[loop.index0] }}</b><span>{{ text|md_inline }}</span></div>
+      {% endfor %}
+    </div>
+    <h4>Пункты</h4>
+    <div class="card">
+      {% for p in q.pairs %}
+        <div class="match-row">
+          <div class="match-left">{{ p.left|md_inline }}</div>
+          <select name="m{{ loop.index0 }}" required aria-label="Вариант для пункта {{ loop.index }}">
+            <option value="">—</option>
+            {% for i, text in match_choices %}<option value="{{ i }}">{{ 'ABCDEFGHIJ'[loop.index0] }}</option>{% endfor %}
+          </select>
+        </div>
+      {% endfor %}
+    </div>
+    <div class="actions"><button class="btn primary" type="submit">Ответить</button></div>
+
+  {% elif q.type == 'order' %}
+    <p class="muted small">Расставь элементы в верном порядке стрелками ↑ ↓.</p>
+    <div class="card">
+      <ol class="order-list" id="order-list">
+        {% for i, text in order_items %}
+          <li data-i="{{ i }}">
+            <span class="order-text">{{ text|md_inline }}</span>
+            <span class="order-btns">
+              <button type="button" class="btn small" data-move="-1" aria-label="Выше">↑</button>
+              <button type="button" class="btn small" data-move="1" aria-label="Ниже">↓</button>
+            </span>
+          </li>
+        {% endfor %}
+      </ol>
+    </div>
+    <div class="actions"><button class="btn primary" type="submit">Ответить</button></div>
+
+  {% else %}
+    {% if llm_on %}
+      <div class="voice-row">
+        <button class="btn" type="button" id="mic">🎙 Записать голосом</button>
+        <span id="mic-status" class="muted small"></span>
+      </div>
+    {% endif %}
+    {% if q.type in ('open', 'code') or llm_on %}
+      <textarea name="text" id="answer-text" class="{{ 'mono' if q.type == 'code' }}" spellcheck="false"
+        placeholder="{{ 'Напиши решение…' if q.type == 'code' else ('Продиктуй ответ или набери его здесь…' if llm_on else 'Набросай ответ своими словами (необязательно)…') }}">{{ q.starter or '' }}</textarea>
+    {% endif %}
+    <input type="hidden" name="check_id" value="">
+    <div class="actions">
+      {% if llm_on %}<button class="btn primary" type="button" id="check-btn">Проверить ответ</button>{% endif %}
+      <button class="btn {{ '' if llm_on else 'primary' }}" type="button" id="reveal">{{ 'Показать эталон без проверки' if llm_on else 'Показать ответ' }}</button>
+    </div>
+    <p id="hint" class="muted small">
+      {% if llm_on %}Расшифровку можно поправить перед проверкой. Ctrl+Enter — проверить.
+      {% else %}Сначала ответь про себя{% if q.type in ('open', 'code') %} или в поле{% endif %}. Ctrl+Enter — показать ответ.{% endif %}
+    </p>
+    <div id="check-box" hidden></div>
+
+    <div id="reveal-box" hidden>
+      {{ reference(q) if not q.rubric else '' }}
+      {% if q.rubric %}
+        {# для кейсов: эталон + чек-лист, по которому ты оцениваешь себя #}
+        <h4>Эталонный ответ</h4>
+        <div class="card md">{{ q.answer|md }}</div>
+        <h4>Что ты назвал? Отметь пункты</h4>
+        <div class="card rubric">
+          {% for p in q.rubric %}
+            <label><input type="checkbox" name="rubric" value="{{ loop.index0 }}"><span>{{ p|md_inline }}</span></label>
+          {% endfor %}
+        </div>
+        {% if q.explanation %}<h4>Пояснение</h4><div class="md">{{ q.explanation|md }}</div>{% endif %}
+      {% endif %}
+      <h4>Как вспомнилось? (клавиши 1–4)</h4>
+      {{ rate_buttons(previews) }}
+      {% if not previews %}<p class="muted small" style="margin-top:8px">{{ 'Повтор ошибки: расписание не меняется.' if retry else 'Вопрос ещё не подошёл по сроку: ответ запишется в историю, расписание не изменится.' }}</p>{% endif %}
+    </div>
+  {% endif %}
+</form>
+{% endblock %}

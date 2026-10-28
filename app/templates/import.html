@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Импорт вопросов{% endblock %}
+{% block content %}
+<h1>Импорт вопросов</h1>
+<p class="muted">Вставь YAML-батч из чата. Корректные вопросы сохранятся в <code>questions/inbox/</code>, а ошибки покажутся ниже, их можно скопировать обратно в чат.</p>
+
+{% if report %}
+  {% if source == 'paste' %}
+    {% if report.added or report.updated or report.unchanged %}
+      <div class="banner ok">
+        Импорт: новых <b>{{ report.added }}</b>, обновлено <b>{{ report.updated }}</b>, без изменений <b>{{ report.unchanged }}</b>.
+        {% if report.saved_file %}<br><span class="small">Сохранено в <code>questions/{{ report.saved_file }}</code></span>{% endif %}
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="banner">
+      Скан папки <code>questions/</code>: файлов {{ report.files }}, новых <b>{{ report.added }}</b>,
+      обновлено <b>{{ report.updated }}</b>, без изменений {{ report.unchanged }}, скрыто {{ report.deactivated }}.
+    </div>
+  {% endif %}
+  {% if report.warnings %}
+    <div class="banner warn"><b>Предупреждения</b><ul>{% for w in report.warnings %}<li>{{ w }}</li>{% endfor %}</ul></div>
+  {% endif %}
+  {% if report.errors %}
+    <div class="banner bad">
+      <b>Ошибки ({{ report.errors|length }})</b>
+      <ul>{% for e in report.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+    </div>
+    <textarea id="errs" hidden>Исправь эти ошибки в батче и пришли исправленные вопросы целиком в том же формате:
+{% for e in report.errors %}- {{ e }}
+{% endfor %}</textarea>
+    <div class="actions"><button class="btn small" type="button" data-copy="errs">Скопировать ошибки для чата</button></div>
+  {% endif %}
+{% endif %}
+
+<form method="post" action="/import">
+  <textarea name="text" class="mono" style="min-height:260px" spellcheck="false"
+    placeholder="- id: la-eig-001&#10;  topic: linalg/eigen&#10;  type: mcq&#10;  question: |&#10;    ...">{{ text }}</textarea>
+  <div class="actions">
+    <button class="btn primary" type="submit">Проверить и импортировать</button>
+  </div>
+</form>
+
+<h2>Пересканировать папку</h2>
+<p class="muted small">Если ты добавил или поправил файлы в <code>questions/</code> руками. Правка вопроса с тем же <code>id</code> прогресс не сбрасывает.</p>
+<form method="post" action="/import/rescan"><button class="btn" type="submit">Пересканировать questions/</button></form>
+{% endblock %}

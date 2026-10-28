@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Флаги{% endblock %}
+{% block content %}
+<h1>Некорректные вопросы</h1>
+<p class="muted">Вопросы, которые ты пометил при разборе. Из очередей они исключены. Скопируй список в чат-автор, поправь YAML с тем же <code>id</code>, и флаг снимется сам при импорте.</p>
+
+{% if items %}
+  <textarea id="fixlist" hidden>Вот вопросы, в которых я нашёл проблему. Исправь каждый и пришли исправленные версии в том же YAML-формате, с теми же id.
+{% for it in items %}
+### {{ it.id }} ({{ it.topic }})
+Проблема: {{ it.note or 'не указана' }}
+Текст вопроса: {{ it.q.question }}
+{% endfor %}</textarea>
+  <div class="actions"><button class="btn primary" type="button" data-copy="fixlist">Скопировать список для чата</button></div>
+
+  {% for it in items %}
+    <div class="card">
+      <div class="small muted">{{ it.id }} · {{ it.topic }}</div>
+      <div class="md" style="margin:.4rem 0">{{ it.q.question|md }}</div>
+      <div class="banner bad" style="margin:.6rem 0">Проблема: {{ it.note or 'не указана' }}</div>
+      <form method="post" action="/q/{{ it.id }}/unflag">
+        <input type="hidden" name="next" value="/flagged">
+        <a class="btn small" href="/q/{{ it.id }}">Открыть</a>
+        <button class="btn small" type="submit">Снять флаг</button>
+      </form>
+    </div>
+  {% endfor %}
+{% else %}
+  <div class="banner ok">Флагов нет.</div>
+{% endif %}
+{% endblock %}

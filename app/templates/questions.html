@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Вопросы{% endblock %}
+{% block content %}
+<h1>Вопросы</h1>
+<form method="get" class="actions" style="align-items:stretch">
+  <input type="text" name="q" value="{{ q }}" placeholder="Поиск по тексту…" style="flex:2;min-width:180px">
+  <input type="text" name="topic" value="{{ topic }}" placeholder="Тема (linalg/eigen)" style="flex:1;min-width:140px">
+  <button class="btn" type="submit">Найти</button>
+</form>
+<p class="muted small">Показано: {{ items|length }}{% if items|length >= 300 %} (лимит 300){% endif %}</p>
+
+<div class="card scroll" style="padding:6px 10px">
+  <table class="list">
+    <thead><tr><th>Вопрос</th><th>Тип</th><th>Статус</th><th>Точность</th></tr></thead>
+    <tbody>
+    {% for x in items %}
+      <tr>
+        <td>
+          <a href="/q/{{ x.id }}">{{ x.title|replace('\n', ' ')|truncate(110) }}</a><br>
+          <span class="muted small">{{ x.id }} · {{ x.topic }}{% if x.flagged %} · <span class="pill bad">⚑ флаг</span>{% endif %}</span>
+        </td>
+        <td>{{ TYPE_LABELS[x.type] }}</td>
+        <td class="small">
+          {% if not x.reps %}<span class="pill">новый</span>
+          {% elif x.due <= now %}<span class="pill due">пора</span>
+          {% else %}<span class="muted">до {{ x.due[:10] }}</span>{% endif %}
+        </td>
+        <td>{% if x.acc is not none %}{{ x.acc }}%{% else %}–{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="muted">Ничего не найдено.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

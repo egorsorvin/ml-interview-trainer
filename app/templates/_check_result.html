@@ -1,0 +1,11 @@
+{% from "_macros.html" import llm_review, rate_buttons %}
+<h4>Эталонный ответ</h4>
+<div class="card md">{{ q.answer|md }}</div>
+
+{{ llm_review(res) }}
+
+{% if q.explanation %}<h4>Пояснение</h4><div class="md">{{ q.explanation|md }}</div>{% endif %}
+
+<h4>Модель предлагает: «{{ RATING_LABELS[res.suggested] }}». Выбери оценку (клавиши 1–4)</h4>
+{{ rate_buttons(previews, res.suggested) }}
+<p class="muted small" style="margin-top:8px">Это подсказка. Если модель ошиблась, поставь свою оценку. Проверка стоила ${{ '%.4f'|format(res.cost) }}.</p>

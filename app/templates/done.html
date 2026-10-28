@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Итоги{% endblock %}
+{% block content %}
+<h1>Сессия завершена</h1>
+<p class="muted">{{ MODES[s.mode] }}{% if s.topic %} · {{ s.topic }}{% endif %}</p>
+
+<div class="stats">
+  <div class="stat"><b>{{ n }}</b><span>вопросов</span></div>
+  <div class="stat"><b>{% if avg is not none %}{{ avg }}%{% else %}–{% endif %}</b><span>результат с первой попытки</span></div>
+  <div class="stat"><b>{{ counts[3] + counts[4] }}</b><span>вспомнил хорошо</span></div>
+  <div class="stat"><b>{{ minutes }}</b><span>минут</span></div>
+</div>
+
+{% if missed %}
+  <h2>Ошибки — стоит перечитать</h2>
+  <div class="card">
+    <ul style="margin:0;padding-left:1.2rem">
+      {% for qid in missed %}<li><a href="/q/{{ qid }}">{{ qid }}</a></li>{% endfor %}
+    </ul>
+  </div>
+{% else %}
+  <div class="banner ok">Ни одной ошибки. Отличная сессия.</div>
+{% endif %}
+
+<div class="actions">
+  <a class="btn primary" href="/start?mode={{ s.mode }}{% if s.topic %}&topic={{ s.topic }}{% endif %}{% if s.tag %}&tag={{ s.tag }}{% endif %}">Ещё одну такую же</a>
+  <a class="btn" href="/">На главную</a>
+</div>
+{% endblock %}

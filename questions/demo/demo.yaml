@@ -1,0 +1,119 @@
+# Демо-вопросы, чтобы проверить приложение. Удали папку questions/demo/, когда появятся свои.
+- id: demo-la-eig-001
+  topic: demo/linalg
+  type: mcq
+  difficulty: 2
+  tags: [eigen, pca]
+  question: |
+    Пусть $A \in \mathbb{R}^{n \times n}$ — симметричная матрица.
+    Что верно про её собственные векторы, отвечающие **разным** собственным значениям?
+  options:
+    - text: "Они ортогональны"
+      correct: true
+      why: "Следствие спектральной теоремы: $\\langle v_i, v_j \\rangle = 0$ при $\\lambda_i \\ne \\lambda_j$."
+    - text: "Они всегда линейно зависимы"
+      correct: false
+    - text: "Они совпадают с сингулярными векторами любой матрицы"
+      correct: false
+    - text: "Их нельзя выбрать вещественными"
+      correct: false
+  explanation: |
+    Для симметричной $A$: $\lambda_i \langle v_i, v_j\rangle = \langle A v_i, v_j\rangle = \langle v_i, A v_j\rangle = \lambda_j \langle v_i, v_j\rangle$,
+    откуда при $\lambda_i \ne \lambda_j$ скалярное произведение равно нулю.
+
+- id: demo-ml-reg-002
+  topic: demo/ml
+  type: multi
+  difficulty: 2
+  tags: [regularization]
+  question: |
+    Какие утверждения про L1-регуляризацию (Lasso) верны?
+  options:
+    - {text: "Может занулять коэффициенты", correct: true}
+    - {text: "Штраф равен $\\lambda \\sum_j |w_j|$", correct: true}
+    - {text: "Всегда даёт гладкую функцию потерь", correct: false, why: "Модуль негладкий в нуле."}
+    - {text: "Эквивалентна гауссову априору на веса", correct: false, why: "Это L2. L1 соответствует лапласовскому априору."}
+  explanation: |
+    L1 ↔ лапласовский prior, приводит к разреженным решениям; L2 ↔ гауссовский prior.
+
+- id: demo-ml-bias-003
+  topic: demo/ml
+  type: card
+  difficulty: 1
+  tags: [bias-variance]
+  question: |
+    Запиши разложение ожидаемой квадратичной ошибки предсказания $\mathbb{E}\big[(y - \hat f(x))^2\big]$
+    на три составляющие (bias–variance decomposition) и назови, что означает каждая из них.
+  answer: |
+    $$\mathbb{E}\big[(y - \hat f(x))^2\big] = \underbrace{\text{Bias}^2}_{\text{систематическая ошибка}} + \underbrace{\text{Var}}_{\text{разброс}} + \underbrace{\sigma^2}_{\text{шум}}$$
+  explanation: |
+    Сложная модель: низкий bias, высокий variance. Простая — наоборот.
+
+- id: demo-ml-case-004
+  topic: demo/ml
+  type: open
+  difficulty: 3
+  tags: [case, metrics]
+  question: |
+    В задаче детекции мошенничества доля положительного класса — $0{,}2\%$.
+    Модель показывает accuracy $99{,}8\%$. Заказчик доволен. Что ты ему скажешь и что предложишь сделать?
+  answer: |
+    Accuracy здесь бессмысленна: константный ответ «не мошенник» даёт те же 99,8%.
+    Нужно смотреть на precision/recall и PR-кривую, подбирать порог под стоимость ошибок,
+    использовать class weights / сэмплирование и валидироваться стратифицированно.
+  rubric:
+    - "Тривиальный классификатор даёт такую же accuracy"
+    - "Метрики: precision, recall, F1 / PR-AUC (а не ROC-AUC как единственная)"
+    - "Порог выбирается исходя из стоимости FP и FN"
+    - "Борьба с дисбалансом: веса классов, сэмплирование, focal loss"
+    - "Стратифицированная валидация, следить за утечками"
+  explanation: |
+    При сильном дисбалансе PR-AUC информативнее ROC-AUC: ROC не штрафует за большое число FP на фоне огромного числа негативов.
+
+- id: demo-py-algo-005
+  topic: demo/python
+  type: code
+  difficulty: 1
+  tags: [algorithms, two-pointers]
+  language: python
+  question: |
+    Реализуй `two_sum(nums, target)`: верни индексы двух разных элементов, дающих в сумме `target`.
+    Решение за $O(n)$.
+  starter: |
+    def two_sum(nums: list[int], target: int) -> tuple[int, int]:
+        ...
+  solution: |
+    def two_sum(nums, target):
+        seen = {}
+        for i, x in enumerate(nums):
+            if target - x in seen:
+                return seen[target - x], i
+            seen[x] = i
+  tests: |
+    assert sorted(two_sum([2, 7, 11, 15], 9)) == [0, 1]
+    assert sorted(two_sum([3, 3], 6)) == [0, 1]
+  explanation: |
+    Хеш-таблица «значение → индекс» даёт один проход. Кладём элемент в словарь *после* проверки, чтобы не использовать его дважды.
+
+- id: demo-torch-006
+  topic: demo/pytorch
+  type: code
+  difficulty: 2
+  tags: [pytorch, autograd]
+  language: python
+  question: |
+    Дополни шаг обучения: обнули градиенты, посчитай loss, сделай backward и обнови веса.
+  starter: |
+    for x, y in loader:
+        pred = model(x)
+        loss = loss_fn(pred, y)
+        # ...
+  solution: |
+    for x, y in loader:
+        optimizer.zero_grad()
+        pred = model(x)
+        loss = loss_fn(pred, y)
+        loss.backward()
+        optimizer.step()
+  explanation: |
+    Градиенты в PyTorch **накапливаются**, поэтому `zero_grad()` нужен на каждой итерации.

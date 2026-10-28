@@ -1,0 +1,110 @@
+{% macro meta(q) %}
+<div class="meta">
+  <span class="chip">{{ TYPE_LABELS[q.type] }}</span>
+  <a class="chip topic" href="/questions?topic={{ q.topic }}">{{ q.topic }}</a>
+  <span class="chip" title="Сложность">{{ '●' * q.difficulty }}{{ '○' * (3 - q.difficulty) }}</span>
+  {% for t in q.tags %}<span class="chip">#{{ t }}</span>{% endfor %}
+</div>
+{% endmacro %}
+
+{# Блок «правильный ответ» для card / open / code. a — сохранённый ответ (для отметок по рубрике) #}
+{% macro reference(q, a=None) %}
+  {% if q.type == 'code' %}
+    <h4>Эталонное решение</h4>
+    <div class="md">{{ ('```' ~ q.language ~ '\n' ~ q.solution ~ '\n```')|md }}</div>
+  {% else %}
+    <h4>Эталонный ответ</h4>
+    <div class="md">{{ q.answer|md }}</div>
+  {% endif %}
+  {% if q.rubric %}
+    <h4>Ключевые пункты</h4>
+    <ul class="rubric-list">
+      {% for p in q.rubric %}
+        <li class="{{ ('hit' if loop.index0 in a.rubric else 'miss') if a is not none else '' }}">{{ p|md_inline }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  {% if q.explanation %}
+    <h4>Пояснение</h4>
+    <div class="md">{{ q.explanation|md }}</div>
+  {% endif %}
+{% endmacro %}
+
+{# Варианты mcq/multi с разметкой верно/неверно. selected — список индексов или None #}
+{% macro options_review(q, selected=None) %}
+  {% for o in q.options %}
+    {% set is_sel = selected is not none and loop.index0 in selected %}
+    <div class="opt static {{ 'ok' if o.correct else ('bad' if is_sel else '') }}">
+      <span class="key">{{ loop.index }}</span>
+      <span>{{ o.text|md_inline }}{% if o.why %}<span class="why">{{ o.why|md_inline }}</span>{% endif %}</span>
+      <span class="mark">
+        {% if o.correct and is_sel %}✓ твой ответ{% elif o.correct %}✓ верно{% elif is_sel %}✗ твой ответ{% endif %}
+      </span>
+    </div>
+  {% endfor %}
+  {% if q.explanation %}
+    <h4>Пояснение</h4>
+    <div class="md">{{ q.explanation|md }}</div>
+  {% endif %}
+{% endmacro %}
+
+{# Кнопки оценки 1–4; previews — {1: '1 дн.', ...} (интервалы до следующего повтора), suggested — предложенная оценка #}
+{% macro rate_buttons(previews=None, suggested=None) %}
+<div class="rate">
+  {% for r, label in RATING_LABELS.items() %}
+    <button type="submit" name="rating" value="{{ r }}" class="{{ 'suggested' if suggested == r }}">{{ label }}<small>{{ r }}{% if previews %} · {{ previews[r] }}{% endif %}</small></button>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{# Разбор по пунктам от модели: res = {points, mistakes, major_error, feedback, frac, suggested} #}
+{% macro llm_review(res) %}
+  <h4>Разбор по пунктам · {{ (res.frac * 100)|round|int }}%</h4>
+  <ul class="verdicts">
+    {% for p in res.points %}
+      <li class="v-{{ p.status }}">
+        <span class="v-ico">{{ {'hit': '✓', 'partial': '≈', 'miss': '✗'}[p.status] }}</span>
+        <div>{{ p.text|md_inline }}{% if p.comment %}<div class="muted small">{{ p.comment|md_inline }}</div>{% endif %}</div>
+      </li>
+    {% endfor %}
+  </ul>
+  {% if res.mistakes %}
+    <div class="banner warn"><b>Ошибки в ответе{% if res.major_error %} (существенные){% endif %}</b>
+      <ul>{% for m in res.mistakes %}<li>{{ m|md_inline }}</li>{% endfor %}</ul></div>
+  {% endif %}
+  {% if res.feedback %}<div class="card md">{{ res.feedback|md }}</div>{% endif %}
+{% endmacro %}
+
+{# Верные пары match. chosen — индексы выбранных правых вариантов по порядку пар, либо None #}
+{% macro match_review(q, chosen=None) %}
+  {% set rights = q.pairs|map(attribute='right')|list + (q.extra_right or []) %}
+  <div class="card">
+    {% for p in q.pairs %}
+      {% set ok = chosen is not none and chosen[loop.index0] == loop.index0 %}
+      <div class="pair-row {{ ('ok' if ok else 'bad') if chosen is not none else '' }}">
+        <div class="pair-left">{{ p.left|md_inline }}</div>
+        <div class="pair-right">
+          {% if chosen is not none and not ok %}<div class="muted small">твой ответ: <s>{{ rights[chosen[loop.index0]]|md_inline }}</s></div>{% endif %}
+          <div>{{ '✓' if ok else ('✗' if chosen is not none else '→') }} {{ p.right|md_inline }}</div>
+        </div>
+      </div>
+    {% endfor %}
+    {% if q.extra_right %}<p class="muted small" style="margin:.6rem 0 0">Лишние варианты: {% for t in q.extra_right %}{{ t|md_inline }}{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+  </div>
+  {% if q.explanation %}<h4>Пояснение</h4><div class="md">{{ q.explanation|md }}</div>{% endif %}
+{% endmacro %}
+
+{# Верный порядок order. given — порядок, который выбрал отвечающий (индексы), либо None #}
+{% macro order_review(q, given=None) %}
+  <h4>Верный порядок</h4>
+  <ol class="order-correct">
+    {% for t in q['items'] %}<li>{{ t|md_inline }}</li>{% endfor %}
+  </ol>
+  {% if given is not none %}
+    <h4>Твой порядок</h4>
+    <ol class="order-correct">
+      {% for i in given %}<li class="{{ 'ok' if i == loop.index0 else 'bad' }}">{{ q['items'][i]|md_inline }}</li>{% endfor %}
+    </ol>
+  {% endif %}
+  {% if q.explanation %}<h4>Пояснение</h4><div class="md">{{ q.explanation|md }}</div>{% endif %}
+{% endmacro %}

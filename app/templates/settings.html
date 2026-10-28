@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Настройки{% endblock %}
+{% block content %}
+<h1>Настройки</h1>
+
+{% set msgs = {
+  'topics': 'Сохранено. Ежедневная сессия теперь собирается из выбранных тем.',
+  'srs': 'Режим повторений сохранён. Он действует на следующие ответы; уже назначенные сроки не пересчитываются (если потолок уменьшили, слишком далёкие сроки подтянуты).',
+  'llm': 'Настройки проверки ответов сохранены.'} %}
+{% if saved in msgs %}<div class="banner ok">{{ msgs[saved] }}</div>{% endif %}
+{% if saved == 'srs_bad' %}<div class="banner bad">Не удалось прочитать числа. Вероятность — от 0,70 до 0,99, потолок — целое число дней.</div>{% endif %}
+
+<h2>Режим повторений</h2>
+<p class="muted">Чем выше целевая вероятность вспомнить, тем чаще повторы. Потолок ограничивает максимальный интервал между повторениями.
+Сейчас: <b>{{ presets[srs.mode].label if srs.mode in presets else 'Свой' }}</b> ({{ srs.retention }} · потолок {{ srs.cap }} дн.).</p>
+<form method="post" action="/settings/srs" id="srs-form">
+  <div class="card">
+    {% for key, p in presets.items() %}
+      <label class="opt static" style="cursor:pointer;margin:8px 0">
+        <input type="radio" name="preset" value="{{ key }}" data-retention="{{ p.retention }}" data-cap="{{ p.cap }}" {{ 'checked' if srs.mode == key }}>
+        <span><b>{{ p.label }}</b> <span class="muted small">· вероятность {{ p.retention }}, потолок {{ p.cap }} дн.</span></span>
+      </label>
+    {% endfor %}
+    <div class="match-row" style="margin-top:12px">
+      <label class="small muted">Целевая вероятность (0,70–0,99)<input type="text" name="retention" id="srs-retention" value="{{ srs.retention }}" inputmode="decimal"></label>
+      <label class="small muted">Потолок интервала, дней<input type="text" name="cap" id="srs-cap" value="{{ srs.cap }}" inputmode="numeric"></label>
+    </div>
+    <p class="muted small" style="margin:.6rem 0 0">Как растёт интервал за один ответ: «Трудно» (вспомнил, но очень слабо) — не больше ×1,2 и не меньше +1 день, «Хорошо» — не больше ×2,5, «Легко» — не больше ×3,5, «Не вспомнил» — завтра. Это работает и после долгой паузы: просроченный вопрос не улетает сразу к потолку. В режиме «Обычный» «Хорошо» подряд даёт 1 → 3 → 8 → 14 дней.</p>
+  </div>
+  <div class="actions"><button class="btn primary" type="submit">Сохранить режим</button></div>
+</form>
+
+<h2>Проверка ответов моделью</h2>
+{% if key_set %}
+  <div class="banner ok">Ключ OpenRouter найден в .env.</div>
+{% else %}
+  <div class="banner warn">Ключ не задан. Создай файл <code>.env</code> рядом с <code>run.bat</code> со строкой <code>OPENROUTER_API_KEY=твой_ключ</code> и перезапусти приложение. Без ключа работает ручная оценка по рубрике.</div>
+{% endif %}
+<form method="post" action="/settings/llm">
+  <div class="card">
+    <label class="small muted">Модель распознавания речи
+      <input type="text" name="stt_model" value="{{ llm_cfg.stt_model }}"></label>
+    <label class="small muted" style="display:block;margin-top:10px">Модель проверки ответа
+      <input type="text" name="grader_model" value="{{ llm_cfg.grader_model }}"></label>
+    <label class="small muted" style="display:block;margin-top:10px">Месячный лимит расходов, $ (0 — без лимита)
+      <input type="text" name="monthly_limit" value="{{ llm_cfg.monthly_limit }}" inputmode="decimal"></label>
+    <label class="opt static" style="cursor:pointer;margin:12px 0 0">
+      <input type="checkbox" name="deny_collection" {{ 'checked' if llm_cfg.deny_collection }}>
+      <span>Запрещать провайдерам хранить данные запросов <span class="muted small">(если у модели нет такого провайдера, запрос вернёт ошибку)</span></span>
+    </label>
+    <p class="muted small" style="margin:.8rem 0 0">Потрачено в этом месяце: <b>${{ '%.4f'|format(spend) }}</b>
+      {% if llm_cfg.monthly_limit > 0 %}из ${{ '%.2f'|format(llm_cfg.monthly_limit) }}{% endif %}.
+      Названия моделей — как на openrouter.ai (например, <code>elevenlabs/scribe-v2</code>, <code>openai/gpt-transcribe</code>, <code>anthropic/claude-haiku-5.5</code>).</p>
+  </div>
+  <div class="actions">
+    <button class="btn primary" type="submit">Сохранить</button>
+    <button class="btn" type="button" id="llm-test" {{ 'disabled' if not key_set }}>Проверить подключение</button>
+  </div>
+  <pre id="llm-test-out" class="muted small" style="white-space:pre-wrap" hidden></pre>
+</form>
+
+<h2>Темы в ежедневной сессии</h2>
+<p class="muted">Отметь темы верхнего уровня, которые должны попадать в ежедневную подборку: и повторения, и новые вопросы.
+Снятая галочка ставит тему на паузу: прогресс и расписание сохраняются, просроченные вопросы просто не показываются.
+Новые темы из импорта включаются сами.</p>
+
+{% if topics %}
+<form method="post" action="/settings">
+  <div class="card" style="padding-top:8px;padding-bottom:8px">
+    {% for g in topics %}
+      <label class="opt static" style="cursor:pointer;margin:8px 0">
+        <input type="checkbox" name="enabled" value="{{ g.name }}" {{ 'checked' if g.name not in paused }}>
+        <span>
+          <b>{{ g.name }}</b>
+          <span class="muted small">· {{ g.learned }}/{{ g.total }} в работе</span>
+          {% if g.due %}<span class="pill due">{{ g.due }} к повтору</span>{% endif %}
+        </span>
+      </label>
+    {% endfor %}
+  </div>
+  <div class="actions"><button class="btn primary" type="submit">Сохранить</button></div>
+</form>
+<p class="muted small">Лимит новых вопросов в день ({{ new_per_day }}) задаётся переменной <code>TRAINER_NEW_PER_DAY</code>.
+Тренировка по конкретной теме, «повторить» у темы, мини-собес и слабые места паузу не учитывают: это явный выбор.</p>
+{% else %}
+  <div class="banner">Пока нет вопросов, а значит и тем. <a href="/import">Импортировать</a></div>
+{% endif %}
+{% endblock %}

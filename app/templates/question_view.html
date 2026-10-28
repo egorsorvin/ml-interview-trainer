@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% from "_macros.html" import meta, reference, options_review, match_review, order_review %}
+{% block title %}{{ q.id }}{% endblock %}
+{% block content %}
+<p class="small"><a href="javascript:history.back()">← назад</a> · <span class="muted">{{ q.id }}</span></p>
+{{ meta(q) }}
+
+{% if q.flagged %}
+  <div class="banner bad">
+    ⚑ Помечен как некорректный{% if q.flag_note %}: {{ q.flag_note }}{% endif %}. Из очередей исключён, вернётся после правки в YAML.
+    <form method="post" action="/q/{{ q.id }}/unflag" class="inline">
+      <input type="hidden" name="next" value="/q/{{ q.id }}"><button class="btn small" type="submit">Снять флаг</button>
+    </form>
+  </div>
+{% endif %}
+
+<div class="card question md">{{ q.question|md }}</div>
+
+{% if q.type in ('mcq', 'multi') %}
+  {{ options_review(q) }}
+{% elif q.type == 'match' %}
+  {{ match_review(q) }}
+{% elif q.type == 'order' %}
+  {{ order_review(q) }}
+{% else %}
+  {% if q.starter %}<h4>Заготовка</h4><div class="md">{{ ('```' ~ (q.language or 'python') ~ '\n' ~ q.starter ~ '\n```')|md }}</div>{% endif %}
+  {{ reference(q) }}
+{% endif %}
+
+<h2>Прогресс</h2>
+{% if card %}
+  <p class="small">Повторений: {{ card.reps }} · ошибок: {{ card.lapses }} · следующее:
+    <b>{{ card.due[:10] }}</b>{% if card.due <= now %} <span class="pill due">пора</span>{% endif %}</p>
+{% else %}
+  <p class="muted small">Ещё не отвечал.</p>
+{% endif %}
+{% if history %}
+  <div class="card scroll" style="padding:6px 10px">
+    <table class="list">
+      <thead><tr><th>Когда (UTC)</th><th>Оценка</th><th>Время</th></tr></thead>
+      {% for h in history %}
+        <tr><td>{{ h.ts[:16]|replace('T', ' ') }}</td><td>{{ RATING_LABELS[h.rating] }}</td><td>{{ (h.time_ms / 1000)|round|int if h.time_ms else '–' }} с</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+{% endif %}
+
+{% if not q.flagged %}
+<details class="flag">
+  <summary>⚑ Пометить как некорректный</summary>
+  <form method="post" action="/q/{{ q.id }}/flag" style="margin-top:8px">
+    <input type="hidden" name="next" value="/q/{{ q.id }}">
+    <input type="text" name="note" placeholder="Что не так">
+    <div class="actions"><button class="btn small danger" type="submit">Пометить</button></div>
+  </form>
+</details>
+{% endif %}
+{% endblock %}
