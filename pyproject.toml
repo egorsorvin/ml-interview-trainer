@@ -1,0 +1,31 @@
+[project]
+name = "ml-interview-trainer"
+version = "0.1.0"
+description = "Тренажёр подготовки к ML-собеседованиям с автоматической проверкой устных ответов"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["app/static/vendor"]
+
+[tool.ruff.lint]
+# E/W — стиль PEP 8, F — ошибки (неиспользуемые импорты, необъявленные имена),
+# I — порядок импортов, UP — устаревший синтаксис, B — типичные баги, SIM — упрощения
+select = ["E", "W", "F", "I", "UP", "B", "SIM"]
+# E501 (длина строки) не проверяем: переносы делает форматтер, длинные строки-тексты оставляем
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# тесты задают переменные окружения до импорта приложения
+"tests/*" = ["E402"]
+
+[tool.ruff.lint.flake8-bugbear]
+# в FastAPI вызовы в значениях по умолчанию — штатный способ объявлять зависимости и поля формы
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Form", "fastapi.File", "fastapi.Query"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

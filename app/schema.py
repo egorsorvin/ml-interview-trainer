@@ -2,6 +2,7 @@
 
 Один вопрос — одна запись YAML. Описание формата для людей: docs/FORMAT.md.
 """
+
 from __future__ import annotations
 
 import re
@@ -72,7 +73,15 @@ class Question(BaseModel):
     tests: str | None = None
 
     @field_validator(
-        "id", "topic", "question", "answer", "explanation", "language", "starter", "solution", "tests",
+        "id",
+        "topic",
+        "question",
+        "answer",
+        "explanation",
+        "language",
+        "starter",
+        "solution",
+        "tests",
         mode="before",
     )
     @classmethod
@@ -125,7 +134,7 @@ class Question(BaseModel):
         return out
 
     @model_validator(mode="after")
-    def _check_type(self) -> "Question":
+    def _check_type(self) -> Question:
         if not self.question:
             raise ValueError("question: пусто")
         t = self.type
@@ -166,8 +175,12 @@ class Question(BaseModel):
             if len({x.casefold() for x in lefts}) != len(lefts):
                 raise ValueError("match: левые части пар должны быть уникальны")
             if len({x.casefold() for x in rights}) != len(rights):
-                raise ValueError("match: правые части (включая extra_right) должны быть уникальны, иначе пары неоднозначны")
-            self.pairs = [Pair(left=a, right=b) for a, b in zip(lefts, rights)]
+                raise ValueError(
+                    "match: правые части (включая extra_right) должны быть уникальны, иначе пары неоднозначны"
+                )
+            self.pairs = [
+                Pair(left=a, right=b) for a, b in zip(lefts, rights, strict=False)
+            ]  # лишние правые варианты отбрасываются
             self.extra_right = extra or None
         elif t == "order":
             items = [x.strip() for x in (self.items or [])]
@@ -226,7 +239,7 @@ def _escape_traps(block: str) -> dict[int, list[int]]:
             n = stack.pop()
             if isinstance(n, yaml.ScalarNode):
                 if n.style == '"':
-                    raw = block[n.start_mark.index:n.end_mark.index]
+                    raw = block[n.start_mark.index : n.end_mark.index]
                     if any(m.group(1) in "abfnrtv" for m in re.finditer(r"\\(.)", raw, re.S)):
                         lines.add(n.start_mark.line + 1)
             elif isinstance(n, yaml.SequenceNode):
@@ -277,7 +290,8 @@ def parse_text(text: str, label: str = "текст") -> ParseResult:
             if i in traps:
                 res.errors.append(
                     f"{name}: в строках {traps[i]} в двойных кавычках есть \\n, \\t, \\f, \\b… — YAML превратит их "
-                    f"в управляющие символы и испортит формулу. {ESCAPE_HINT}")
+                    f"в управляющие символы и испортит формулу. {ESCAPE_HINT}"
+                )
                 if qid:
                     res.bad_ids.add(str(qid))
                 continue
