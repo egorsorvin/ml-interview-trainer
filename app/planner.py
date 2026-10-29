@@ -1,4 +1,5 @@
 """Сборка очередей сессий."""
+
 from __future__ import annotations
 
 import json
@@ -49,32 +50,52 @@ def build_items(conn: sqlite3.Connection, mode: str, topic: str | None, tag: str
             params += extra_params
 
     if mode == "daily":
-        due = [r[0] for r in conn.execute(
-            f"SELECT q.id FROM questions q JOIN cards c ON c.question_id=q.id WHERE {where} AND c.due<=?"
-            " ORDER BY c.due LIMIT ?", [*params, now, config.DUE_LIMIT])]
-        new = [r[0] for r in conn.execute(
-            f"SELECT q.id FROM questions q LEFT JOIN cards c ON c.question_id=q.id WHERE {where}"
-            " AND c.question_id IS NULL ORDER BY RANDOM() LIMIT ?", [*params, new_budget(conn)])]
+        due = [
+            r[0]
+            for r in conn.execute(
+                f"SELECT q.id FROM questions q JOIN cards c ON c.question_id=q.id WHERE {where} AND c.due<=?"
+                " ORDER BY c.due LIMIT ?",
+                [*params, now, config.DUE_LIMIT],
+            )
+        ]
+        new = [
+            r[0]
+            for r in conn.execute(
+                f"SELECT q.id FROM questions q LEFT JOIN cards c ON c.question_id=q.id WHERE {where}"
+                " AND c.question_id IS NULL ORDER BY RANDOM() LIMIT ?",
+                [*params, new_budget(conn)],
+            )
+        ]
         ids = due + new
         random.shuffle(ids)  # перемешиваем, чтобы темы чередовались
     elif mode in ("topic", "random"):
         default = config.TOPIC_SESSION_N if mode == "topic" else config.DEFAULT_SESSION_N
-        ids = [r[0] for r in conn.execute(
-            f"SELECT q.id FROM questions q WHERE {where} ORDER BY RANDOM() LIMIT ?", [*params, n or default])]
+        ids = [
+            r[0]
+            for r in conn.execute(
+                f"SELECT q.id FROM questions q WHERE {where} ORDER BY RANDOM() LIMIT ?", [*params, n or default]
+            )
+        ]
     elif mode == "weak":
         # средний результат по последним 5 ответам на вопрос; берём те, где ниже config.WEAK_THRESHOLD
-        ids = [r[0] for r in conn.execute(
-            "WITH r AS (SELECT question_id, score, ROW_NUMBER() OVER (PARTITION BY question_id ORDER BY id DESC) rn"
-            " FROM reviews)"
-            f" SELECT q.id FROM r JOIN questions q ON q.id=r.question_id WHERE r.rn<=5 AND {where}"
-            " GROUP BY q.id HAVING AVG(r.score) < ? ORDER BY AVG(r.score) ASC, RANDOM() LIMIT ?",
-            [*params, config.WEAK_THRESHOLD, n or config.TOPIC_SESSION_N])]
+        ids = [
+            r[0]
+            for r in conn.execute(
+                "WITH r AS (SELECT question_id, score, ROW_NUMBER() OVER (PARTITION BY question_id ORDER BY id DESC) rn"
+                " FROM reviews)"
+                f" SELECT q.id FROM r JOIN questions q ON q.id=r.question_id WHERE r.rn<=5 AND {where}"
+                " GROUP BY q.id HAVING AVG(r.score) < ? ORDER BY AVG(r.score) ASC, RANDOM() LIMIT ?",
+                [*params, config.WEAK_THRESHOLD, n or config.TOPIC_SESSION_N],
+            )
+        ]
     else:
         raise ValueError(f"unknown mode {mode}")
     return [[qid, 0] for qid in ids]
 
 
-def create_session(conn: sqlite3.Connection, mode: str, topic: str | None, tag: str | None, n: int | None) -> int | None:
+def create_session(
+    conn: sqlite3.Connection, mode: str, topic: str | None, tag: str | None, n: int | None
+) -> int | None:
     items = build_items(conn, mode, topic, tag, n)
     if not items:
         return None

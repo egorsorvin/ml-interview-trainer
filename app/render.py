@@ -1,4 +1,5 @@
 """Markdown + формулы ($..$, $$..$$) → HTML. Формулы дорисовывает KaTeX на клиенте."""
+
 import re
 
 from markdown_it import MarkdownIt

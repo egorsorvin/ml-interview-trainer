@@ -5,6 +5,7 @@
 эталон и рубрику. Ключ OPENROUTER_API_KEY берётся только из окружения / .env, в базу не пишется.
 Все платные обращения учитываются в таблице api_calls (месячный лимит расходов в настройках).
 """
+
 from __future__ import annotations
 
 import base64
@@ -36,8 +37,11 @@ class BudgetExceeded(LLMError):
 
 # ---------- учёт расходов ----------
 
+
 def month_spend(conn: sqlite3.Connection) -> float:
-    return float(conn.execute("SELECT COALESCE(SUM(cost),0) FROM api_calls WHERE ts>=?", (local_month_start(),)).fetchone()[0])
+    return float(
+        conn.execute("SELECT COALESCE(SUM(cost),0) FROM api_calls WHERE ts>=?", (local_month_start(),)).fetchone()[0]
+    )
 
 
 def ensure_budget(conn: sqlite3.Connection) -> None:
@@ -48,11 +52,28 @@ def ensure_budget(conn: sqlite3.Connection) -> None:
         )
 
 
-def record_call(conn: sqlite3.Connection, kind: str, model: str, cost: float, estimated: bool,
-                session_id: int | None, question_id: str | None, detail: dict) -> int:
+def record_call(
+    conn: sqlite3.Connection,
+    kind: str,
+    model: str,
+    cost: float,
+    estimated: bool,
+    session_id: int | None,
+    question_id: str | None,
+    detail: dict,
+) -> int:
     cur = conn.execute(
         "INSERT INTO api_calls(ts, kind, model, cost, estimated, session_id, question_id, detail) VALUES(?,?,?,?,?,?,?,?)",
-        (iso(utcnow()), kind, model, cost, int(estimated), session_id, question_id, json.dumps(detail, ensure_ascii=False)),
+        (
+            iso(utcnow()),
+            kind,
+            model,
+            cost,
+            int(estimated),
+            session_id,
+            question_id,
+            json.dumps(detail, ensure_ascii=False),
+        ),
     )
     return int(cur.lastrowid)
 
@@ -62,6 +83,7 @@ def enabled() -> bool:
 
 
 # ---------- HTTP ----------
+
 
 def _client() -> httpx.AsyncClient:
     return httpx.AsyncClient(
@@ -88,14 +110,16 @@ def _error_text(resp: httpx.Response) -> str:
 
 async def _post(path: str, body: dict) -> httpx.Response:
     if not enabled():
-        raise LLMError("Не задан ключ OPENROUTER_API_KEY: добавь его в файл .env рядом с run.bat и перезапусти приложение.")
+        raise LLMError(
+            "Не задан ключ OPENROUTER_API_KEY: добавь его в файл .env рядом с run.bat и перезапусти приложение."
+        )
     try:
         async with _client() as client:
             return await client.post(path, json=body)
-    except httpx.TimeoutException:
-        raise LLMError("OpenRouter не ответил вовремя. Попробуй ещё раз.")
+    except httpx.TimeoutException as e:
+        raise LLMError("OpenRouter не ответил вовремя. Попробуй ещё раз.") from e
     except httpx.HTTPError as e:
-        raise LLMError(f"Не удалось связаться с OpenRouter: {e.__class__.__name__}")
+        raise LLMError(f"Не удалось связаться с OpenRouter: {e.__class__.__name__}") from e
 
 
 def _auth_hint(resp: httpx.Response) -> str:
@@ -124,8 +148,15 @@ def glossary(conn: sqlite3.Connection, limit: int = 80, ttl: float = 600.0) -> l
     forms: dict[str, Counter[str]] = {}
     for (blob,) in conn.execute("SELECT data FROM questions WHERE active=1"):
         d = json.loads(blob)
-        parts = [d.get("question", ""), d.get("answer", ""), d.get("explanation", ""), *(d.get("rubric") or []),
-                 *(d.get("tags") or []), *(d.get("items") or []), *(d.get("extra_right") or [])]
+        parts = [
+            d.get("question", ""),
+            d.get("answer", ""),
+            d.get("explanation", ""),
+            *(d.get("rubric") or []),
+            *(d.get("tags") or []),
+            *(d.get("items") or []),
+            *(d.get("extra_right") or []),
+        ]
         parts += [o.get("text", "") for o in d.get("options") or []]
         for pr in d.get("pairs") or []:
             parts += [pr.get("left", ""), pr.get("right", "")]
@@ -146,6 +177,7 @@ def reset_glossary_cache() -> None:
 
 # ---------- распознавание речи ----------
 
+
 def wav_seconds(data: bytes) -> float | None:
     try:
         with wave.open(io.BytesIO(data)) as w:
@@ -154,8 +186,14 @@ def wav_seconds(data: bytes) -> float | None:
         return None
 
 
-async def transcribe(conn: sqlite3.Connection, wav: bytes, *, session_id: int | None = None,
-                     question_id: str | None = None, allow_empty: bool = False) -> dict:
+async def transcribe(
+    conn: sqlite3.Connection,
+    wav: bytes,
+    *,
+    session_id: int | None = None,
+    question_id: str | None = None,
+    allow_empty: bool = False,
+) -> dict:
     if not wav or len(wav) < 1000:
         raise LLMError("Запись пустая или слишком короткая.")
     if len(wav) > config.MAX_AUDIO_BYTES:
@@ -193,14 +231,23 @@ async def transcribe(conn: sqlite3.Connection, wav: bytes, *, session_id: int | 
     if estimated:
         cost = (usage.get("seconds") or seconds or 0) * config.STT_FALLBACK_PRICE_PER_SEC
     seconds = usage.get("seconds") or seconds
-    call_id = record_call(conn, "stt", cfg["stt_model"], float(cost), estimated, session_id, question_id,
-                          {"seconds": seconds, "chars": len(text), "keyterms": used_terms})
+    call_id = record_call(
+        conn,
+        "stt",
+        cfg["stt_model"],
+        float(cost),
+        estimated,
+        session_id,
+        question_id,
+        {"seconds": seconds, "chars": len(text), "keyterms": used_terms},
+    )
     if not text and not allow_empty:
         raise LLMError("Речь не распознана: запись тихая или пустая. Проверь микрофон и попробуй ещё раз.")
     return {"text": text, "seconds": seconds, "cost": float(cost), "call_id": call_id, "keyterms": used_terms}
 
 
 # ---------- проверка ответа ----------
+
 
 class Point(BaseModel):
     text: str = ""
@@ -261,13 +308,20 @@ major_error = true только если ошибка искажает суть 
 
 def _build_user_message(q: dict, answer: str) -> str:
     rubric = q.get("rubric") or []
-    parts = [f"<question>\n{q['question']}\n</question>", f"<reference_answer>\n{q.get('answer') or q.get('solution') or ''}\n</reference_answer>"]
+    parts = [
+        f"<question>\n{q['question']}\n</question>",
+        f"<reference_answer>\n{q.get('answer') or q.get('solution') or ''}\n</reference_answer>",
+    ]
     if rubric:
         numbered = "\n".join(f"{i}. {p}" for i, p in enumerate(rubric, 1))
         parts.append(f"<rubric>\n{numbered}\n</rubric>")
-        parts.append(f"Верни ровно {len(rubric)} элементов в points, в том же порядке, что и пункты рубрики (поле text можно оставить пустым).")
+        parts.append(
+            f"Верни ровно {len(rubric)} элементов в points, в том же порядке, что и пункты рубрики (поле text можно оставить пустым)."
+        )
     else:
-        parts.append("Рубрики нет: сам выдели из эталонного ответа от 3 до 6 ключевых мыслей и оцени каждую (в поле text — формулировка пункта).")
+        parts.append(
+            "Рубрики нет: сам выдели из эталонного ответа от 3 до 6 ключевых мыслей и оцени каждую (в поле text — формулировка пункта)."
+        )
     parts.append(f"<user_answer>\n{answer}\n</user_answer>")
     return "\n\n".join(parts)
 
@@ -280,7 +334,7 @@ def _extract_json(text: str) -> dict:
     start, end = t.find("{"), t.rfind("}")
     if start < 0 or end <= start:
         raise ValueError("в ответе модели нет JSON")
-    return json.loads(t[start:end + 1])
+    return json.loads(t[start : end + 1])
 
 
 def _parse_grade(text: str, q: dict) -> GradeOut:
@@ -289,7 +343,7 @@ def _parse_grade(text: str, q: dict) -> GradeOut:
     if rubric:
         if len(out.points) != len(rubric):
             raise ValueError(f"нужно {len(rubric)} пунктов в points, получено {len(out.points)}")
-        for p, r in zip(out.points, rubric):
+        for p, r in zip(out.points, rubric, strict=True):
             p.text = r
     else:
         if not 2 <= len(out.points) <= 8:
@@ -306,8 +360,13 @@ def fraction(points: list[Point] | list[dict]) -> float:
 
 
 async def _chat(messages: list[dict], model: str, max_tokens: int = 1800) -> tuple[str, float, bool]:
-    body = {"model": model, "messages": messages, "max_tokens": max_tokens,
-            "usage": {"include": True}, "reasoning": {"effort": "low"}}
+    body = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "usage": {"include": True},
+        "reasoning": {"effort": "low"},
+    }
     resp = await _post("/chat/completions", body)
     if resp.status_code in (400, 422) and "reasoning" in body:
         body.pop("reasoning")  # модель не принимает параметр reasoning — повторяем без него
@@ -320,8 +379,8 @@ async def _chat(messages: list[dict], model: str, max_tokens: int = 1800) -> tup
         if isinstance(content, list):
             content = "".join(c.get("text", "") for c in content if isinstance(c, dict))
         content = str(content or "")
-    except (KeyError, IndexError, TypeError):
-        raise LLMError("OpenRouter вернул неожиданный ответ. Попробуй ещё раз.")
+    except (KeyError, IndexError, TypeError) as e:
+        raise LLMError("OpenRouter вернул неожиданный ответ. Попробуй ещё раз.") from e
     usage = data.get("usage") or {}
     cost = usage.get("cost")
     estimated = cost is None
@@ -334,9 +393,12 @@ async def grade(conn: sqlite3.Connection, q: dict, answer: str, *, session_id: i
     """Оценивает ответ по эталону. Возвращает результат и id сохранённой проверки (check_id)."""
     ensure_budget(conn)
     cfg = settings.llm_cfg(conn)
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": _build_user_message(q, answer)}]
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": _build_user_message(q, answer)},
+    ]
     total_cost, any_estimated, out, last_err = 0.0, False, None, ""
-    for attempt in range(2):
+    for _attempt in range(2):
         content, cost, est = await _chat(messages, cfg["grader_model"])
         total_cost += cost
         any_estimated |= est
@@ -347,10 +409,15 @@ async def grade(conn: sqlite3.Connection, q: dict, answer: str, *, session_id: i
             last_err = str(e)[:300]
             messages = messages + [
                 {"role": "assistant", "content": content[:4000]},
-                {"role": "user", "content": f"Ответ не удалось разобрать: {last_err}. Верни только корректный JSON по схеме."},
+                {
+                    "role": "user",
+                    "content": f"Ответ не удалось разобрать: {last_err}. Верни только корректный JSON по схеме.",
+                },
             ]
     if out is None:
-        record_call(conn, "grade", cfg["grader_model"], total_cost, any_estimated, session_id, q["id"], {"error": last_err})
+        record_call(
+            conn, "grade", cfg["grader_model"], total_cost, any_estimated, session_id, q["id"], {"error": last_err}
+        )
         raise LLMError("Модель вернула ответ в неверном формате дважды. Попробуй ещё раз или оцени вручную.")
 
     frac = round(fraction(out.points), 4)
@@ -375,7 +442,8 @@ def load_check(conn: sqlite3.Connection, check_id: int, session_id: int, questio
     """Результат ранее выполненной проверки, если он относится к этой сессии и этому вопросу."""
     row = conn.execute(
         "SELECT detail FROM api_calls WHERE id=? AND kind='grade' AND session_id=? AND question_id=?",
-        (check_id, session_id, question_id)).fetchone()
+        (check_id, session_id, question_id),
+    ).fetchone()
     if not row:
         return None
     d = json.loads(row["detail"])
@@ -383,6 +451,7 @@ def load_check(conn: sqlite3.Connection, check_id: int, session_id: int, questio
 
 
 # ---------- проверка подключения ----------
+
 
 def _silent_wav(seconds: float = 1.0, rate: int = 16000) -> bytes:
     buf = io.BytesIO()
@@ -407,7 +476,9 @@ async def ping(conn: sqlite3.Connection) -> dict:
     except LLMError as e:
         out["stt"] = {"ok": False, "model": cfg["stt_model"], "error": str(e)}
     try:
-        content, cost, est = await _chat([{"role": "user", "content": "Ответь одним словом: ok"}], cfg["grader_model"], max_tokens=200)
+        content, cost, est = await _chat(
+            [{"role": "user", "content": "Ответь одним словом: ok"}], cfg["grader_model"], max_tokens=200
+        )
         record_call(conn, "grade", cfg["grader_model"], cost, est, None, None, {"ping": True})
         out["grader"] = {"ok": True, "model": cfg["grader_model"], "cost": cost, "reply": content.strip()[:40]}
     except LLMError as e:

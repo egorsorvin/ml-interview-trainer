@@ -5,6 +5,7 @@
 - srs: режим повторений (retention + потолок интервала).
 - llm: модели и месячный лимит расходов на проверку ответов. Сам ключ API хранится только в .env.
 """
+
 from __future__ import annotations
 
 import json
@@ -32,6 +33,7 @@ def put(conn: sqlite3.Connection, key: str, value: Any) -> None:
 
 # ---------- темы на паузе ----------
 
+
 def paused_topics(conn: sqlite3.Connection) -> list[str]:
     return sorted(get(conn, KEY_PAUSED, []))
 
@@ -53,6 +55,7 @@ def exclude_sql(conn: sqlite3.Connection, alias: str = "q") -> tuple[str, list]:
 
 
 # ---------- режим повторений ----------
+
 
 def srs_params(conn: sqlite3.Connection) -> dict:
     """{'mode': 'normal'|'intensive'|'support'|'custom', 'retention': float, 'cap': int}"""
@@ -78,6 +81,7 @@ def set_srs(conn: sqlite3.Connection, retention: float, cap: int) -> dict:
 
 
 # ---------- проверка ответов моделью ----------
+
 
 def llm_cfg(conn: sqlite3.Connection) -> dict:
     saved = get(conn, KEY_LLM, {}) or {}
