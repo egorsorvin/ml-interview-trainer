@@ -366,6 +366,7 @@ async def _chat(messages: list[dict], model: str, max_tokens: int = 1800) -> tup
         "max_tokens": max_tokens,
         "usage": {"include": True},
         "reasoning": {"effort": "low"},
+        "provider": {"data_collection": "deny"},  # тексты ответов — только провайдерам без хранения и обучения (1.2)
     }
     resp = await _post("/chat/completions", body)
     if resp.status_code in (400, 422) and "reasoning" in body:
