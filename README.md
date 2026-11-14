@@ -39,6 +39,17 @@ ruff check . && ruff format .         # линтер и форматтер вр�
 Настройки ruff лежат в `pyproject.toml`, хуки pre-commit — в `.pre-commit-config.yaml`: ruff, проверка YAML
 банка вопросов, поиск приватных ключей, запрет больших файлов (например, `data/trainer.db`).
 
+Оценочный набор (нужен ключ OpenRouter в `.env`; каждый шаг продолжает с места остановки, предел расходов $1):
+
+```bash
+python eval/generate.py cards     # карточки сценариев, без вызовов API
+python eval/generate.py answers   # ответы по карточкам
+python eval/generate.py judge     # прогон проверяющей модели
+python eval/review.py             # ручная проверка вслепую: http://127.0.0.1:8010
+```
+
+Ноутбуки выполняются из корня репозитория или из `notebooks/`; первый читает банк из git-тега `bank-before-eda-fixes`.
+
 ## Типы вопросов
 
 | Тип | Что делает отвечающий | Оценка |
@@ -103,6 +114,8 @@ ruff check . && ruff format .         # линтер и форматтер вр�
 | Банк вопросов | `questions/` (YAML; `demo/` — примеры, `inbox/` — импортированные батчи) |
 | Формат вопросов и промпт, которым они генерируются | `docs/FORMAT.md`, `docs/PROMPT_FOR_QUESTION_CHAT.md` |
 | Дизайн-документ ML-системы | `docs/ml_system_design_doc.md` |
+| Анализ данных: банк вопросов, пробный оценочный набор | `notebooks/01_question_bank_eda.ipynb`, `notebooks/02_trial_eval_set_eda.ipynb` |
+| Оценочный набор: генерация ответов по сценариям, страница ручной проверки, данные пробного прогона | `eval/generate.py`, `eval/review.py`, `eval/trial/` |
 | Тесты | `tests/` |
 
 Переменные окружения (или строки в `.env`): `TRAINER_NEW_PER_DAY` (новых вопросов в день, по умолчанию 15),
