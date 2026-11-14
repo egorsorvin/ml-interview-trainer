@@ -1,3 +1,10 @@
 -r requirements.txt
 ruff
 pre-commit
+# анализ данных и ноутбуки
+pandas
+matplotlib
+scikit-learn
+nbformat
+nbclient
+ipykernel

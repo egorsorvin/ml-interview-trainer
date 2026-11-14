@@ -96,7 +96,16 @@ class Question(BaseModel):
         if isinstance(v, str):
             return [v]
         if isinstance(v, list):
-            return [x if isinstance(x, str) else str(x) for x in v]
+            out = []
+            for x in v:
+                if isinstance(x, dict | list):
+                    # «- Назвал X: детали» без кавычек YAML читает как словарь; str() молча испортил бы тезис
+                    raise ValueError(
+                        f"элемент списка должен быть строкой, получено {type(x).__name__}: {x!r}. "
+                        "Если в пункте есть двоеточие, возьми его в кавычки"
+                    )
+                out.append(x if isinstance(x, str) else str(x))
+            return out
         return v
 
     @field_validator("id")
