@@ -3,6 +3,7 @@
 Источник правды — файлы. Прогресс (карточки, история) хранится в БД по id вопроса,
 поэтому правка текста вопроса в YAML прогресс не сбрасывает.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -41,10 +42,7 @@ def _files():
     root = config.QUESTIONS_DIR
     if not root.exists():
         return []
-    found = [
-        p for p in list(root.rglob("*.yaml")) + list(root.rglob("*.yml"))
-        if not p.name.startswith(("_", "."))
-    ]
+    found = [p for p in list(root.rglob("*.yaml")) + list(root.rglob("*.yml")) if not p.name.startswith(("_", "."))]
     return sorted(found, key=lambda p: (p.stat().st_mtime, str(p)))  # при дубликатах id побеждает более свежий файл
 
 
@@ -58,8 +56,18 @@ def _upsert(conn: sqlite3.Connection, q: Question, source: str, update_source: b
         conn.execute(
             "INSERT INTO questions(id, topic, type, difficulty, tags, data, hash, source, created_at, updated_at)"
             " VALUES(?,?,?,?,?,?,?,?,?,?)",
-            (q.id, q.topic, q.type, q.difficulty, json.dumps(q.tags, ensure_ascii=False),
-             json.dumps(data, ensure_ascii=False), digest, source, now, now),
+            (
+                q.id,
+                q.topic,
+                q.type,
+                q.difficulty,
+                json.dumps(q.tags, ensure_ascii=False),
+                json.dumps(data, ensure_ascii=False),
+                digest,
+                source,
+                now,
+                now,
+            ),
         )
         return "added"
     if row["hash"] != digest:
@@ -67,8 +75,17 @@ def _upsert(conn: sqlite3.Connection, q: Question, source: str, update_source: b
         conn.execute(
             "UPDATE questions SET topic=?, type=?, difficulty=?, tags=?, data=?, hash=?, source=?,"
             " active=1, flagged=0, flag_note=NULL, updated_at=? WHERE id=?",
-            (q.topic, q.type, q.difficulty, json.dumps(q.tags, ensure_ascii=False),
-             json.dumps(data, ensure_ascii=False), digest, source, now, q.id),
+            (
+                q.topic,
+                q.type,
+                q.difficulty,
+                json.dumps(q.tags, ensure_ascii=False),
+                json.dumps(data, ensure_ascii=False),
+                digest,
+                source,
+                now,
+                q.id,
+            ),
         )
         return "updated"
     if update_source:
@@ -112,6 +129,7 @@ def sync_files(conn: sqlite3.Connection) -> Report:
 
 
 # --- вставка батча из текста (из UI) ---
+
 
 class _Dumper(yaml.SafeDumper):
     pass

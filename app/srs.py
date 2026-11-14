@@ -7,6 +7,7 @@ learning_steps пустые: у нас нет «повторить через 10
 Целевая вероятность вспомнить (retention) и потолок интервала задаются режимом в настройках
 (см. settings.srs_params), поэтому планировщик собирается на каждый вызов.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -109,7 +110,9 @@ def clamp_existing_due(conn: sqlite3.Connection) -> int:
     for r in rows:
         card = Card.from_json(r["fsrs"])
         card.due = limit
-        conn.execute("UPDATE cards SET due=?, fsrs=? WHERE question_id=?", (iso(limit), card.to_json(), r["question_id"]))
+        conn.execute(
+            "UPDATE cards SET due=?, fsrs=? WHERE question_id=?", (iso(limit), card.to_json(), r["question_id"])
+        )
     return len(rows)
 
 

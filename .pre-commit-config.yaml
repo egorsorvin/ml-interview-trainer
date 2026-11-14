@@ -1,0 +1,23 @@
+# Проверки перед каждым коммитом. Установка: pre-commit install
+# Прогнать вручную по всем файлам: pre-commit run --all-files
+exclude: ^app/static/vendor/
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace        # пробелы в конце строк
+      - id: end-of-file-fixer          # перевод строки в конце файла
+      - id: check-yaml                 # синтаксис YAML (в том числе банк вопросов)
+      - id: check-toml
+      - id: check-merge-conflict       # забытые маркеры <<<<<<< после слияния
+      - id: detect-private-key         # приватные ключи в коде
+      - id: check-added-large-files    # большие файлы, например база trainer.db
+        args: ["--maxkb=500"]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.3
+    hooks:
+      - id: ruff-check
+        args: ["--fix"]
+      - id: ruff-format

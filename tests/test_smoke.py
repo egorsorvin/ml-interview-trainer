@@ -14,8 +14,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.schema import parse_text
 from app.render import md
+from app.schema import parse_text
 
 
 @pytest.fixture(scope="module")
@@ -74,7 +74,9 @@ def test_schema_rejects_bad_questions():
 def test_yaml_error_and_code_fence():
     res = parse_text("- id: a\n  question: [unclosed", "t")
     assert res.fatal and "строка" in res.errors[0]
-    fenced = "Вот вопросы:\n```yaml\n- id: card-001\n  topic: a/b\n  type: card\n  question: q\n  answer: a\n```\nГотово."
+    fenced = (
+        "Вот вопросы:\n```yaml\n- id: card-001\n  topic: a/b\n  type: card\n  question: q\n  answer: a\n```\nГотово."
+    )
     assert len(parse_text(fenced, "t").questions) == 1
 
     # пример кода внутри поля (с отступом) не должен ломать разбор внешней ```yaml ограды
@@ -98,9 +100,9 @@ def test_yaml_error_and_code_fence():
 
 def test_latex_in_double_quotes_is_caught():
     # \c — YAML сам ругается на неизвестный escape; \theta и \frac — молча портятся (TAB, FF), их ловит валидатор
-    loud = r'''- {id: a-001, topic: a, type: card, question: q, answer: "$\cos x$"}'''
-    silent = r'''- {id: a-002, topic: a, type: card, question: "Угол $\theta$ и $\frac{1}{2}$", answer: a}'''
-    ok = r'''- {id: a-003, topic: a, type: card, question: "Угол $\\theta$", answer: 'x $\theta$'}'''
+    loud = r"""- {id: a-001, topic: a, type: card, question: q, answer: "$\cos x$"}"""
+    silent = r"""- {id: a-002, topic: a, type: card, question: "Угол $\theta$ и $\frac{1}{2}$", answer: a}"""
+    ok = r"""- {id: a-003, topic: a, type: card, question: "Угол $\\theta$", answer: 'x $\theta$'}"""
     r1, r2, r3 = parse_text(loud, "t"), parse_text(silent, "t"), parse_text(ok, "t")
     assert r1.errors and "одинарных" in r1.errors[0]
     assert r2.errors and "a-002" in r2.errors[0] and not r2.questions
@@ -157,7 +159,11 @@ def test_full_flow(client):
 
 
 def test_double_submit_is_ignored(client):
-    sid = int(re.search(r"/s/(\d+)", client.get("/start?mode=random&n=3", follow_redirects=False).headers["location"]).group(1))
+    sid = int(
+        re.search(r"/s/(\d+)", client.get("/start?mode=random&n=3", follow_redirects=False).headers["location"]).group(
+            1
+        )
+    )
     page = client.get(f"/s/{sid}")
     qid = re.search(r'name="qid" value="([^"]+)"', page.text).group(1)
     data = {"qid": qid, "choice": "0", "rating": "3", "time_ms": "1"}
@@ -217,7 +223,7 @@ def test_rescan_reactivates_and_deactivates(client):
 def test_srs_modes_cap_intervals_and_previews(client):
     from datetime import timedelta
 
-    from app import config, settings, srs
+    from app import settings, srs
     from app.db import db, iso, utcnow
 
     qid = "demo-la-eig-001"
@@ -310,6 +316,7 @@ def test_paused_topics_are_excluded_from_daily(client):
 # match / order
 # ---------------------------------------------------------------------------------------------------------------
 
+
 def _start(client, url):
     r = client.get(url, follow_redirects=False)
     assert r.status_code == 303 and "empty" not in r.headers["location"], r.headers["location"]
@@ -395,6 +402,7 @@ def test_match_and_order_scoring(client):
 # ---------------------------------------------------------------------------------------------------------------
 
 import json  # noqa: E402
+from datetime import UTC
 
 GOOD_GRADE = (
     '{"points": [{"status": "hit", "comment": "названо"}, {"status": "hit", "comment": "названо"}, '
@@ -411,15 +419,21 @@ def _fake_openrouter(state):
         if request.url.path.endswith("/audio/transcriptions"):
             if state.get("reject_keyterms") and "keyterms" in body:
                 return httpx.Response(400, json={"error": {"message": "keyterms are not supported"}})
-            return httpx.Response(200, json={"text": "Accuracy бессмысленна из-за дисбаланса",
-                                             "usage": {"cost": 0.0018, "seconds": 59.0}})
+            return httpx.Response(
+                200, json={"text": "Accuracy бессмысленна из-за дисбаланса", "usage": {"cost": 0.0018, "seconds": 59.0}}
+            )
         if request.url.path.endswith("/chat/completions"):
             if state.get("reject_reasoning") and "reasoning" in body:
                 return httpx.Response(400, json={"error": {"message": "reasoning is not supported"}})
             replies = state["replies"]
             content = replies.pop(0) if len(replies) > 1 else replies[0]
-            return httpx.Response(200, json={"choices": [{"message": {"content": content}}],
-                                             "usage": {"cost": 0.0004, "prompt_tokens": 900, "completion_tokens": 250}})
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": content}}],
+                    "usage": {"cost": 0.0004, "prompt_tokens": 900, "completion_tokens": 250},
+                },
+            )
         return httpx.Response(404, json={"error": {"message": "not found"}})
 
     return httpx.MockTransport(handler)
@@ -500,8 +514,11 @@ def test_llm_voice_check_and_override(client, monkeypatch):
     assert "<rubric>" in user_msg and "<user_answer>" in user_msg and "веса классов" in user_msg
 
     # принять предложенную оценку → в статистику идёт реальная доля, в журнале — результат проверки
-    resp = client.post(f"/s/{sid}/answer", follow_redirects=False,
-                       data={"qid": qid, "rating": "3", "check_id": str(res["check_id"]), "text": "веса классов, метрики и порог"})
+    resp = client.post(
+        f"/s/{sid}/answer",
+        follow_redirects=False,
+        data={"qid": qid, "rating": "3", "check_id": str(res["check_id"]), "text": "веса классов, метрики и порог"},
+    )
     rating, score = _review(resp.headers["location"])
     assert rating == 3 and abs(score - 5 / 6) < 1e-3
     fb = client.get(resp.headers["location"]).text
@@ -512,8 +529,11 @@ def test_llm_voice_check_and_override(client, monkeypatch):
     qid2 = re.search(r'name="qid" value="([^"]+)"', page.text).group(1)
     assert qid2 != qid
     res2 = client.post(f"/s/{sid}/check", data={"qid": qid2, "text": "делить до препроцессинга"}).json()
-    resp = client.post(f"/s/{sid}/answer", follow_redirects=False,
-                       data={"qid": qid2, "rating": "2", "check_id": str(res2["check_id"]), "text": "x"})
+    resp = client.post(
+        f"/s/{sid}/answer",
+        follow_redirects=False,
+        data={"qid": qid2, "rating": "2", "check_id": str(res2["check_id"]), "text": "x"},
+    )
     assert _review(resp.headers["location"]) == (2, 0.5)
     assert "итоговая оценка" in client.get(resp.headers["location"]).text
 
@@ -546,8 +566,11 @@ def test_llm_budget_limit_and_manual_fallback(client, monkeypatch):
 
     # ручной режим продолжает работать: отмечаем 2 из 3 пунктов → реальная доля 0,667 → «Хорошо»;
     # несуществующий check_id игнорируется
-    resp = client.post(f"/s/{sid}/answer", follow_redirects=False,
-                       data={"qid": qid, "rating": "3", "rubric": ["0", "2"], "check_id": "999999", "text": "ответ"})
+    resp = client.post(
+        f"/s/{sid}/answer",
+        follow_redirects=False,
+        data={"qid": qid, "rating": "3", "rubric": ["0", "2"], "check_id": "999999", "text": "ответ"},
+    )
     rating, score = _review(resp.headers["location"])
     assert rating == 3 and abs(score - 2 / 3) < 1e-9
 
@@ -586,8 +609,9 @@ def test_llm_retries_and_provider_fallbacks(client, monkeypatch):
         asyncio.run(llm.grade(conn, q, "мой ответ"))
 
     # существенная ошибка ограничивает предложенную оценку «Трудно»
-    major = (GOOD_GRADE.replace('"major_error": false', '"major_error": true')
-             .replace('"mistakes": []', '"mistakes": ["перепутал L1 и L2"]'))
+    major = GOOD_GRADE.replace('"major_error": false', '"major_error": true').replace(
+        '"mistakes": []', '"mistakes": ["перепутал L1 и L2"]'
+    )
     monkeypatch.setattr(llm, "_TRANSPORT", _fake_openrouter({"calls": [], "replies": [major]}))
     with db() as conn:
         out = asyncio.run(llm.grade(conn, q, "мой ответ"))
@@ -606,7 +630,11 @@ def test_llm_retries_and_provider_fallbacks(client, monkeypatch):
     assert len(stt) == 2 and "keyterms" in stt[0] and "keyterms" not in stt[1] and r["keyterms"] is False
 
     # ошибки провайдера превращаются в понятные сообщения
-    monkeypatch.setattr(llm, "_TRANSPORT", httpx.MockTransport(lambda request: httpx.Response(401, json={"error": {"message": "bad key"}})))
+    monkeypatch.setattr(
+        llm,
+        "_TRANSPORT",
+        httpx.MockTransport(lambda request: httpx.Response(401, json={"error": {"message": "bad key"}})),
+    )
     with db() as conn, pytest.raises(llm.LLMError, match="не принял ключ"):
         asyncio.run(llm.grade(conn, q, "мой ответ"))
 
@@ -639,15 +667,17 @@ def test_settings_connection_test_and_glossary(client, monkeypatch):
 # ограничение роста интервала: «Трудно» = вспомнил, но очень слабо
 # ---------------------------------------------------------------------------------------------------------------
 
+
 def _flat_scheduler(retention=0.93, cap=14, fuzz=False):
     from fsrs import Scheduler
 
-    return Scheduler(desired_retention=retention, learning_steps=(), relearning_steps=(),
-                     maximum_interval=cap, enable_fuzzing=fuzz)
+    return Scheduler(
+        desired_retention=retention, learning_steps=(), relearning_steps=(), maximum_interval=cap, enable_fuzzing=fuzz
+    )
 
 
 def test_growth_limit_chains():
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from fsrs import Card
 
@@ -656,28 +686,28 @@ def test_growth_limit_chains():
     s = _flat_scheduler()
 
     def chain(pattern):
-        card, t, out = Card(), datetime(2026, 10, 1, tzinfo=timezone.utc), []
+        card, t, out = Card(), datetime(2026, 10, 1, tzinfo=UTC), []
         for rating in pattern:
             card = srs.review(s, card, rating, t)
             out.append(round((card.due - t).total_seconds() / 86400))
             t = card.due
         return out
 
-    assert chain([3] * 6) == [1, 3, 8, 14, 14, 14]   # раньше 1, 4, 14
-    assert chain([2] * 6) == [1, 2, 3, 4, 5, 6]      # «Трудно» растёт на день-два, а не удваивается
+    assert chain([3] * 6) == [1, 3, 8, 14, 14, 14]  # раньше 1, 4, 14
+    assert chain([2] * 6) == [1, 2, 3, 4, 5, 6]  # «Трудно» растёт на день-два, а не удваивается
     assert chain([4] * 3) == [4, 14, 14]
     assert chain([3, 3, 1, 3, 3]) == [1, 3, 1, 2, 4]  # ошибка возвращает на следующий день
 
 
 def test_hard_after_a_long_pause_does_not_jump_to_the_cap():
     """Вопрос 204: запланирован на 3 дня, отвечен через 16. Раньше «Трудно» давало 14 дней."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from fsrs import Card, Rating
 
     from app import srs
 
-    t0 = datetime(2026, 9, 22, 11, 55, tzinfo=timezone.utc)
+    t0 = datetime(2026, 9, 22, 11, 55, tzinfo=UTC)
     before, _ = _flat_scheduler(0.90, 3).review_card(Card(), Rating.Easy, t0)
     assert (before.due - t0).days == 3 and 8 < before.stability < 8.5
     now = t0 + timedelta(days=16)
@@ -695,7 +725,7 @@ def test_hard_after_a_long_pause_does_not_jump_to_the_cap():
 
 def test_growth_limit_holds_with_random_answers_and_delays():
     import random
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from fsrs import Card
 
@@ -705,7 +735,7 @@ def test_growth_limit_holds_with_random_answers_and_delays():
     for retention, cap in ((0.93, 14), (0.95, 3), (0.90, 30)):
         for _ in range(60):
             s = _flat_scheduler(retention, cap, fuzz=True)
-            card, t = Card(), datetime(2026, 10, 1, tzinfo=timezone.utc)
+            card, t = Card(), datetime(2026, 10, 1, tzinfo=UTC)
             for _ in range(10):
                 rating = rng.choice([1, 2, 3, 3, 3, 4])
                 limit = srs.growth_limit_days(card, rating)

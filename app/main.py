@@ -39,11 +39,19 @@ templates.env.filters["md_inline"] = md_inline
 templates.env.filters["from_json"] = json.loads
 templates.env.globals["MODES"] = MODES
 # версия статики для ?v= в ссылках: после обновления кода браузер не использует закэшированный старый app.js / style.css
-templates.env.globals["ASSET_V"] = str(int(max(
-    (p.stat().st_mtime for p in (APP_DIR / "static").glob("*.*")), default=0)))
+templates.env.globals["ASSET_V"] = str(
+    int(max((p.stat().st_mtime for p in (APP_DIR / "static").glob("*.*")), default=0))
+)
 
-TYPE_LABELS = {"mcq": "Тест", "multi": "Несколько верных", "card": "Карточка", "open": "Кейс", "code": "Код",
-               "match": "Сопоставь", "order": "Порядок"}
+TYPE_LABELS = {
+    "mcq": "Тест",
+    "multi": "Несколько верных",
+    "card": "Карточка",
+    "open": "Кейс",
+    "code": "Код",
+    "match": "Сопоставь",
+    "order": "Порядок",
+}
 RATING_LABELS = {1: "Не вспомнил", 2: "Трудно", 3: "Хорошо", 4: "Легко"}
 templates.env.globals["TYPE_LABELS"] = TYPE_LABELS
 templates.env.globals["RATING_LABELS"] = RATING_LABELS
@@ -58,6 +66,7 @@ def redirect(url: str) -> RedirectResponse:
 
 
 # ---------- helpers ----------
+
 
 def load_question(conn: sqlite3.Connection, qid: str) -> dict:
     row = conn.execute("SELECT * FROM questions WHERE id=?", (qid,)).fetchone()
@@ -77,6 +86,7 @@ def load_session(conn: sqlite3.Connection, sid: int) -> sqlite3.Row:
 
 # ---------- главная ----------
 
+
 @app.get("/")
 def index(request: Request, empty: int = 0, conn: sqlite3.Connection = Depends(get_db)):
     return render(request, "index.html", d=stats.dashboard(conn), empty=bool(empty), sync=last_sync)
@@ -93,6 +103,7 @@ def start(mode: str = "daily", topic: str = "", tag: str = "", n: int = 0, conn:
 
 
 # ---------- сессия ----------
+
 
 def rating_previews(conn: sqlite3.Connection, qid: str, retry: bool) -> dict | None:
     """Интервалы под кнопками оценки; None, если ответ не повлияет на расписание (повтор ошибки или вопрос ещё не подошёл)."""
@@ -117,7 +128,8 @@ def session_page(request: Request, sid: int, conn: sqlite3.Connection = Depends(
     elif q["type"] == "match":
         n = len(q["pairs"])
         match_choices = [(i, p["right"]) for i, p in enumerate(q["pairs"])] + [
-            (n + j, t) for j, t in enumerate(q.get("extra_right") or [])]
+            (n + j, t) for j, t in enumerate(q.get("extra_right") or [])
+        ]
         random.shuffle(match_choices)
     elif q["type"] == "order":
         order_items = list(enumerate(q["items"]))
@@ -126,9 +138,20 @@ def session_page(request: Request, sid: int, conn: sqlite3.Connection = Depends(
             if [i for i, _ in order_items] != sorted(i for i, _ in order_items):
                 break
     previews = rating_previews(conn, qid, bool(retry)) if q["type"] in ("card", "open", "code") else None
-    return render(request, "question.html", q=q, options=options, match_choices=match_choices,
-                  order_items=order_items, s=s, retry=bool(retry), pos=s["idx"] + 1, total=len(items),
-                  llm_on=llm.enabled() and q["type"] in ("open", "card"), previews=previews)
+    return render(
+        request,
+        "question.html",
+        q=q,
+        options=options,
+        match_choices=match_choices,
+        order_items=order_items,
+        s=s,
+        retry=bool(retry),
+        pos=s["idx"] + 1,
+        total=len(items),
+        llm_on=llm.enabled() and q["type"] in ("open", "card"),
+        previews=previews,
+    )
 
 
 @app.post("/s/{sid}/answer")
@@ -221,8 +244,17 @@ async def answer(request: Request, sid: int, conn: sqlite3.Connection = Depends(
         cur = conn.execute(
             "INSERT INTO reviews(question_id, session_id, ts, rating, score, scheduled, next_due, time_ms, answer)"
             " VALUES(?,?,?,?,?,?,?,?,?)",
-            (qid, sid, iso(now), rating, srs.SCORE[rating] if score is None else score, int(scheduled), next_due, time_ms,
-             json.dumps(payload, ensure_ascii=False)),
+            (
+                qid,
+                sid,
+                iso(now),
+                rating,
+                srs.SCORE[rating] if score is None else score,
+                int(scheduled),
+                next_due,
+                time_ms,
+                json.dumps(payload, ensure_ascii=False),
+            ),
         )
         conn.execute("UPDATE sessions SET items=?, idx=idx+1 WHERE id=?", (json.dumps(items), sid))
     return redirect(f"/r/{cur.lastrowid}")
@@ -269,9 +301,16 @@ async def check_answer(request: Request, sid: int, conn: sqlite3.Connection = De
     except llm.LLMError as e:
         return _json_error(str(e), _llm_status(e))
     html = templates.get_template("_check_result.html").render(
-        q=q, res=res, previews=rating_previews(conn, qid, bool(retry)))
-    return {"ok": True, "html": html, "check_id": res["check_id"], "suggested": res["suggested"],
-            "frac": res["frac"], "cost": res["cost"]}
+        q=q, res=res, previews=rating_previews(conn, qid, bool(retry))
+    )
+    return {
+        "ok": True,
+        "html": html,
+        "check_id": res["check_id"],
+        "suggested": res["suggested"],
+        "frac": res["frac"],
+        "cost": res["cost"],
+    }
 
 
 @app.get("/r/{rid}")
@@ -285,8 +324,17 @@ def feedback(request: Request, rid: int, conn: sqlite3.Connection = Depends(get_
     next_due = None
     if r["next_due"]:
         next_due = srs.humanize_delta(datetime.fromisoformat(r["next_due"].replace("Z", "+00:00")), utcnow())
-    return render(request, "feedback.html", q=q, r=r, a=json.loads(r["answer"]), s=s,
-                  is_last=s["idx"] >= len(items), left=len(items) - s["idx"], next_due=next_due)
+    return render(
+        request,
+        "feedback.html",
+        q=q,
+        r=r,
+        a=json.loads(r["answer"]),
+        s=s,
+        is_last=s["idx"] >= len(items),
+        left=len(items) - s["idx"],
+        next_due=next_due,
+    )
 
 
 @app.get("/s/{sid}/done")
@@ -298,11 +346,20 @@ def done(request: Request, sid: int, conn: sqlite3.Connection = Depends(get_db))
     counts = {k: sum(1 for x in first if x["rating"] == k) for k in (1, 2, 3, 4)}
     total_ms = sum(x["time_ms"] or 0 for x in rows)
     avg = round(100 * sum(x["score"] for x in first) / len(first)) if first else None
-    return render(request, "done.html", s=s, n=len(first), counts=counts, missed=missed, avg=avg,
-                  minutes=round(total_ms / 60000, 1))
+    return render(
+        request,
+        "done.html",
+        s=s,
+        n=len(first),
+        counts=counts,
+        missed=missed,
+        avg=avg,
+        minutes=round(total_ms / 60000, 1),
+    )
 
 
 # ---------- вопросы: каталог, просмотр, флаги ----------
+
 
 @app.get("/questions")
 def questions_page(request: Request, q: str = "", topic: str = "", conn: sqlite3.Connection = Depends(get_db)):
@@ -317,11 +374,23 @@ def questions_page(request: Request, q: str = "", topic: str = "", conn: sqlite3
         "SELECT x.id, x.topic, x.type, x.difficulty, x.flagged, x.data, c.due, c.reps,"
         " (SELECT AVG(score) FROM reviews r WHERE r.question_id=x.id) acc"
         f" FROM questions x LEFT JOIN cards c ON c.question_id=x.id WHERE {' AND '.join(where)}"
-        " ORDER BY x.topic, x.id LIMIT 300", params).fetchall()
-    items = [{"id": r["id"], "topic": r["topic"], "type": r["type"], "difficulty": r["difficulty"],
-              "flagged": r["flagged"], "reps": r["reps"] or 0, "due": r["due"],
-              "acc": None if r["acc"] is None else round(100 * r["acc"]),
-              "title": json.loads(r["data"])["question"]} for r in rows]
+        " ORDER BY x.topic, x.id LIMIT 300",
+        params,
+    ).fetchall()
+    items = [
+        {
+            "id": r["id"],
+            "topic": r["topic"],
+            "type": r["type"],
+            "difficulty": r["difficulty"],
+            "flagged": r["flagged"],
+            "reps": r["reps"] or 0,
+            "due": r["due"],
+            "acc": None if r["acc"] is None else round(100 * r["acc"]),
+            "title": json.loads(r["data"])["question"],
+        }
+        for r in rows
+    ]
     return render(request, "questions.html", items=items, q=q, topic=topic, now=iso(utcnow()))
 
 
@@ -337,7 +406,9 @@ def question_view(request: Request, qid: str, conn: sqlite3.Connection = Depends
 async def flag(request: Request, qid: str, conn: sqlite3.Connection = Depends(get_db)):
     form = await request.form()
     load_question(conn, qid)
-    conn.execute("UPDATE questions SET flagged=1, flag_note=? WHERE id=?", (str(form.get("note", "")).strip()[:2000], qid))
+    conn.execute(
+        "UPDATE questions SET flagged=1, flag_note=? WHERE id=?", (str(form.get("note", "")).strip()[:2000], qid)
+    )
     return redirect(str(form.get("next") or f"/q/{quote(qid)}"))
 
 
@@ -350,12 +421,15 @@ async def unflag(request: Request, qid: str, conn: sqlite3.Connection = Depends(
 
 @app.get("/flagged")
 def flagged_page(request: Request, conn: sqlite3.Connection = Depends(get_db)):
-    rows = conn.execute("SELECT id, topic, data, flag_note FROM questions WHERE flagged=1 AND active=1 ORDER BY topic, id").fetchall()
+    rows = conn.execute(
+        "SELECT id, topic, data, flag_note FROM questions WHERE flagged=1 AND active=1 ORDER BY topic, id"
+    ).fetchall()
     items = [{"id": r["id"], "topic": r["topic"], "note": r["flag_note"], "q": json.loads(r["data"])} for r in rows]
     return render(request, "flagged.html", items=items)
 
 
 # ---------- импорт ----------
+
 
 @app.get("/import")
 def import_page(request: Request):
@@ -366,7 +440,9 @@ def import_page(request: Request):
 async def import_post(request: Request, conn: sqlite3.Connection = Depends(get_db)):
     form = await request.form()
     text = str(form.get("text", ""))
-    report = importer.import_text(conn, text) if text.strip() else importer.Report(errors=["Пусто: вставь YAML с вопросами"])
+    report = (
+        importer.import_text(conn, text) if text.strip() else importer.Report(errors=["Пусто: вставь YAML с вопросами"])
+    )
     # при ошибках оставляем текст в поле, чтобы можно было поправить
     return render(request, "import.html", report=report, text=text if report.errors else "", source="paste")
 
@@ -380,12 +456,22 @@ def import_rescan(request: Request, conn: sqlite3.Connection = Depends(get_db)):
 
 # ---------- настройки ----------
 
+
 @app.get("/settings")
 def settings_page(request: Request, saved: str = "", conn: sqlite3.Connection = Depends(get_db)):
-    return render(request, "settings.html", topics=stats.topics(conn), paused=set(settings.paused_topics(conn)),
-                  saved=saved, new_per_day=config.NEW_PER_DAY, srs=settings.srs_params(conn),
-                  presets=config.SRS_PRESETS, llm_cfg=settings.llm_cfg(conn), key_set=llm.enabled(),
-                  spend=llm.month_spend(conn))
+    return render(
+        request,
+        "settings.html",
+        topics=stats.topics(conn),
+        paused=set(settings.paused_topics(conn)),
+        saved=saved,
+        new_per_day=config.NEW_PER_DAY,
+        srs=settings.srs_params(conn),
+        presets=config.SRS_PRESETS,
+        llm_cfg=settings.llm_cfg(conn),
+        key_set=llm.enabled(),
+        spend=llm.month_spend(conn),
+    )
 
 
 @app.post("/settings")
@@ -419,8 +505,13 @@ async def settings_llm(request: Request, conn: sqlite3.Connection = Depends(get_
         limit = float(str(form.get("monthly_limit", "")).replace(",", "."))
     except ValueError:
         limit = None
-    settings.set_llm_cfg(conn, stt_model=str(form.get("stt_model", "")), grader_model=str(form.get("grader_model", "")),
-                         monthly_limit=limit, deny_collection=form.get("deny_collection") == "on")
+    settings.set_llm_cfg(
+        conn,
+        stt_model=str(form.get("stt_model", "")),
+        grader_model=str(form.get("grader_model", "")),
+        monthly_limit=limit,
+        deny_collection=form.get("deny_collection") == "on",
+    )
     return redirect("/settings?saved=llm")
 
 

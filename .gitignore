@@ -5,3 +5,4 @@ data/
 .pytest_cache/
 .env
 .claude/
+.ruff_cache/
