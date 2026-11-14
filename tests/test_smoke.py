@@ -71,6 +71,22 @@ def test_schema_rejects_bad_questions():
     assert "x1" in res.bad_ids
 
 
+def test_rubric_item_with_unquoted_colon_is_rejected():
+    # «- Назвал X: детали» без кавычек YAML читает как словарь — тезис не должен молча превращаться в строку
+    text = """
+- id: open-001
+  topic: a/b
+  type: open
+  question: q
+  answer: a
+  rubric:
+  - Назвал первое
+  - Назвал специфику: детали
+"""
+    res = parse_text(text, "t")
+    assert not res.questions and "кавычки" in res.errors[0]
+
+
 def test_yaml_error_and_code_fence():
     res = parse_text("- id: a\n  question: [unclosed", "t")
     assert res.fatal and "строка" in res.errors[0]
